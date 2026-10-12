@@ -1,1 +1,2 @@
-# visor-fincas-demo
+# visor-fincas
+ Visor GIS de fincas agrícolas
