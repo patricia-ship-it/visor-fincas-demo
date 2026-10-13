@@ -1,0 +1,10 @@
+{
+  "name": "visor-fincas-functions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Netlify Functions del Visor de Fincas",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "pdf-parse": "^1.1.1"
+  }
+}
