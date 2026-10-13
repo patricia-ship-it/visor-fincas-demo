@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maquinaria — Visor de Fincas</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f0; min-height: 100vh; color: #222; }
+
+  .barra-sesion { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 24px; background: #12291d; color: #cfe0d4; font-size: 12px; }
+  .barra-sesion a { color: #fff; text-decoration: none; font-weight: 600; }
+  header { background: #1a3a2a; color: white; padding: 18px 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
+  header h1 { font-size: 19px; font-weight: 600; }
+  header h1 .demo { font-size: 11px; font-weight: 700; letter-spacing: .08em; background: #e8b84a; color: #1a3a2a; border-radius: 4px; padding: 2px 6px; vertical-align: middle; }
+  header p { font-size: 12px; opacity: 0.75; margin-top: 2px; }
+
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 60px; }
+
+  .resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .tile { background: white; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .tile .etq { font-size: 11px; font-weight: 700; color: #1a3a2a; text-transform: uppercase; letter-spacing: .5px; }
+  .tile .num { font-size: 24px; font-weight: 700; color: #1a3a2a; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .tile .sub { font-size: 12px; color: #777; margin-top: 2px; }
+  .tile.proxima .num { color: #a06a00; }
+  .tile.vencida .num { color: #c0392b; }
+
+  .card { background: white; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); padding: 18px 20px; margin-bottom: 18px; }
+  .card.inactiva { opacity: .6; }
+  .maq-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .maq-cab h2 { font-size: 17px; color: #1a3a2a; }
+  .maq-cab .meta { font-size: 12px; color: #777; margin-top: 3px; }
+  .contador { text-align: right; }
+  .contador .num { font-size: 26px; font-weight: 700; color: #1a3a2a; font-variant-numeric: tabular-nums; }
+  .contador .sub { font-size: 12px; color: #777; }
+
+  .tareas { margin-top: 14px; border-top: 1px solid #f0f0f0; }
+  .tarea { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f3f3; }
+  .tarea .nom { font-size: 14px; font-weight: 600; }
+  .tarea .regla { font-size: 12px; color: #888; font-weight: 400; }
+  .tarea .detalle { font-size: 12px; color: #555; margin-top: 2px; }
+  .barra { height: 6px; background: #eef0ec; border-radius: 3px; margin-top: 7px; overflow: hidden; }
+  .barra span { display: block; height: 100%; background: #3c8a5c; border-radius: 3px; }
+  .barra span.proxima { background: #e8b84a; }
+  .barra span.vencida { background: #c0392b; }
+  .chip { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; padding: 2px 7px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+  .chip.al_dia { background: #eef3ea; color: #244f38; }
+  .chip.proxima { background: #fff3cd; color: #8a6d00; }
+  .chip.vencida { background: #fdecea; color: #c0392b; }
+  .chip.inactiva { background: #eee; color: #777; }
+  .acciones-tarea { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+  button { font-family: inherit; }
+  .btn { background: #1a3a2a; color: white; border: none; border-radius: 7px; padding: 7px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn:hover:not(:disabled) { background: #244f38; }
+  .btn:disabled { background: #aaa; cursor: not-allowed; }
+  .btn-sec { background: none; border: 1px solid #ccc; color: #444; border-radius: 7px; padding: 6px 11px; font-size: 12px; cursor: pointer; }
+  .btn-sec:hover { border-color: #1a3a2a; color: #1a3a2a; }
+  .btn-peligro { background: none; border: none; color: #c0392b; font-size: 12px; cursor: pointer; padding: 6px 4px; }
+  .pie-maq { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+  details.desplegable { margin-top: 10px; }
+  details.desplegable summary { cursor: pointer; font-size: 13px; font-weight: 600; color: #1a3a2a; padding: 4px 0; }
+  .tabla-wrap { overflow-x: auto; margin-top: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: #1a3a2a; padding: 6px 8px; border-bottom: 2px solid #e5e5e0; white-space: nowrap; }
+  td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tfoot td { font-weight: 700; border-top: 2px solid #e5e5e0; }
+  .vacio { font-size: 13px; color: #888; padding: 8px 0; }
+
+  .ayuda { font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 14px; }
+  .estado-pagina { text-align: center; padding: 40px; color: #777; font-size: 14px; }
+  .titulo-seccion { font-size: 15px; color: #1a3a2a; margin: 26px 0 10px; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 50; align-items: center; justify-content: center; padding: 16px; }
+  .modal-overlay.visible { display: flex; }
+  .modal-box { background: white; border-radius: 12px; width: 100%; max-width: 440px; max-height: 92vh; overflow-y: auto; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+  .modal-box h3 { font-size: 16px; color: #1a3a2a; margin-bottom: 4px; }
+  .modal-box .sub { font-size: 12px; color: #777; margin-bottom: 14px; }
+  .campo { margin-bottom: 12px; }
+  .campo label { display: block; font-size: 11px; font-weight: 700; color: #1a3a2a; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .campo input, .campo select, .campo textarea { width: 100%; padding: 8px 9px; border: 1px solid #ddd; border-radius: 7px; font-size: 13px; font-family: inherit; }
+  .campo textarea { resize: vertical; min-height: 50px; }
+  .campo .ayuda-campo { font-size: 11px; color: #888; margin-top: 3px; }
+  .fila { display: flex; gap: 10px; }
+  .fila > .campo { flex: 1; }
+  .grupo { border: 1px solid #eee; border-radius: 8px; padding: 10px 12px 2px; margin-bottom: 12px; }
+  .grupo legend { font-size: 12px; font-weight: 700; color: #1a3a2a; padding: 0 4px; }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 8px; cursor: pointer; }
+  .check input { width: auto; }
+  .modal-estado { font-size: 12px; min-height: 16px; margin: 4px 0 10px; }
+  .modal-estado.ok { color: #1a3a2a; } .modal-estado.error { color: #c0392b; }
+  .modal-botones { display: flex; justify-content: flex-end; gap: 8px; }
+
+  @media (max-width: 560px) {
+    .tarea { grid-template-columns: 1fr; }
+    .acciones-tarea { justify-content: flex-start; }
+    .contador { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<div class="barra-sesion">
+  <a href="index.html">← Volver al visor</a>
+  <span id="etiqueta-sesion">Conectando…</span>
+</div>
+
+<header>
+  <h1>🚜 Maquinaria <span class="demo">DEMO</span></h1>
+  <p>Horas de cada tractor y avisos de mantenimiento (aceite, filtros, ITV…)</p>
+</header>
+
+<main>
+  <div id="contenido"><div class="estado-pagina">⏳ Cargando maquinaria…</div></div>
+</main>
+
+<!-- Revisión hecha -->
+<div class="modal-overlay" id="modal-revision">
+  <div class="modal-box">
+    <h3>✔ Revisión hecha</h3>
+    <div class="sub" id="revision-sub">—</div>
+    <div class="fila">
+      <div class="campo"><label for="rev-fecha">Fecha</label><input type="date" id="rev-fecha" /></div>
+      <div class="campo"><label for="rev-horas">Horas del contador</label><input type="number" id="rev-horas" min="0" step="0.1" /></div>
+    </div>
+    <div class="campo"><label for="rev-notas">Notas (opcional)</label><textarea id="rev-notas" placeholder="Ej. Aceite 15W40, filtro cambiado"></textarea></div>
+    <div class="ayuda" style="font-size:12px;margin-bottom:8px;">Al guardar, el contador de esta tarea vuelve a empezar desde estas horas.</div>
+    <div class="modal-estado" id="rev-estado"></div>
+    <div class="modal-botones">
+      <button class="btn-sec" data-cerrar="modal-revision">Cancelar</button>
+      <button class="btn" id="btn-guardar-revision">Guardar revisión</button>
+    </div>
+  </div>
+</div>
+
+<!-- Alta / edición de máquina -->
+<div class="modal-overlay" id="modal-maquina">
+  <div class="modal-box">
+    <h3 id="maq-titulo">Dar de alta una máquina</h3>
+    <div class="sub">Se usará en el Libro de Trabajo para sumar horas.</div>
+    <div class="fila">
+      <div class="campo"><label for="maq-nombre">Nombre</label><input type="text" id="maq-nombre" placeholder="Ej. JD 7600" /></div>
+      <div class="campo"><label for="maq-tipo">Tipo</label><input type="text" id="maq-tipo" value="Tractor" /></div>
+    </div>
+    <div class="campo"><label for="maq-titular">Titular</label><select id="maq-titular"></select></div>
+    <div class="campo"><label for="maq-email">Correo del titular para avisos</label><input type="email" id="maq-email" placeholder="titular@ejemplo.com" />
+      <div class="ayuda-campo">El aviso llega a este correo y a los administradores.</div></div>
+    <div class="fila">
+      <div class="campo"><label for="maq-horas">Horas con las que inicia</label><input type="number" id="maq-horas" min="0" step="0.1" placeholder="Ej. 3150" />
+        <div class="ayuda-campo">Lo que marca hoy el contador.</div></div>
+      <div class="campo"><label for="maq-fecha">Fecha de alta</label><input type="date" id="maq-fecha" /></div>
+    </div>
+    <label class="check" id="maq-activa-wrap"><input type="checkbox" id="maq-activa" checked /> Activa (aparece en el Libro de Trabajo)</label>
+    <div class="campo"><label for="maq-notas">Notas (opcional)</label><textarea id="maq-notas"></textarea></div>
+    <div class="modal-estado" id="maq-estado"></div>
+    <div class="modal-botones">
+      <button class="btn-sec" data-cerrar="modal-maquina">Cancelar</button>
+      <button class="btn" id="btn-guardar-maquina">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tarea de mantenimiento -->
+<div class="modal-overlay" id="modal-tarea">
+  <div class="modal-box">
+    <h3>Añadir tarea de mantenimiento</h3>
+    <div class="sub" id="tarea-sub">—</div>
+    <div class="campo"><label for="tar-nombre">Tarea</label><input type="text" id="tar-nombre" placeholder="Ej. Cambio de aceite" list="tareas-sugeridas" />
+      <datalist id="tareas-sugeridas"><option value="Cambio de aceite"><option value="Filtro de aire"><option value="Filtro de combustible"><option value="Engrase"><option value="ITV"><option value="Revisión general"></datalist></div>
+
+    <fieldset class="grupo">
+      <legend><label class="check" style="margin:0"><input type="checkbox" id="tar-por-horas" checked /> Por horas de uso</label></legend>
+      <div class="fila">
+        <div class="campo"><label for="tar-cada-horas">Cada (h)</label><input type="number" id="tar-cada-horas" min="1" step="1" placeholder="500" /></div>
+        <div class="campo"><label for="tar-antes-horas">Avisar antes (h)</label><input type="number" id="tar-antes-horas" min="0" step="1" placeholder="50" /></div>
+      </div>
+      <div class="campo"><label for="tar-ultima-horas">Última revisión a las (h)</label><input type="number" id="tar-ultima-horas" min="0" step="0.1" placeholder="Si se deja vacío, cuenta desde ahora" /></div>
+    </fieldset>
+
+    <fieldset class="grupo">
+      <legend><label class="check" style="margin:0"><input type="checkbox" id="tar-por-fecha" /> Por fecha</label></legend>
+      <div class="fila">
+        <div class="campo"><label for="tar-cada-meses">Cada (meses)</label><input type="number" id="tar-cada-meses" min="1" step="1" placeholder="12" /></div>
+        <div class="campo"><label for="tar-antes-dias">Avisar antes (días)</label><input type="number" id="tar-antes-dias" min="0" step="1" placeholder="30" /></div>
+      </div>
+      <div class="campo"><label for="tar-ultima-fecha">Fecha de la última revisión</label><input type="date" id="tar-ultima-fecha" />
+        <div class="ayuda-campo">Si se deja vacía, cuenta desde hoy.</div></div>
+    </fieldset>
+
+    <div class="modal-estado" id="tar-estado"></div>
+    <div class="modal-botones">
+      <button class="btn-sec" data-cerrar="modal-tarea">Cancelar</button>
+      <button class="btn" id="btn-guardar-tarea">Guardar tarea</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SUPABASE_URL      = 'https://xciuhtoolbhuvoeawmkh.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjaXVodG9vbGJodXZvZWF3bWtoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4MDEzNjIsImV4cCI6MjEwNzM3NzM2Mn0.9SKitp_DjviQI7XlKyRBgYsrwsGZh1Q9x5VI3fw96yY';
+
+  // ── Acceso (DEMO: entra solo con el usuario de demostración) ─────────────
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const DEMO_EMAIL = 'demo@example.com', DEMO_PASSWORD = 'VisorFincasDemo-2026';
+  let TOKEN_ACTUAL = SUPABASE_ANON_KEY;
+  let esAdmin = false;          // dar de alta máquinas y tareas
+  let autorizado = false;       // marcar «Revisión hecha» (cualquier persona dada de alta, también el agricultor)
+  let iniciado = false;
+
+  const el = id => document.getElementById(id);
+  const esc = v => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const h = n => n == null ? '—' : Number(n).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' h';
+  const fecha = f => { if (!f) return '—'; const [y, m, d] = String(f).slice(0, 10).split('-'); return `${d}/${m}/${y}`; };
+  const hoy = () => new Date().toISOString().slice(0, 10);
+  const cabeceras = (extra) => Object.assign({ 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${TOKEN_ACTUAL}` }, extra || {});
+
+  async function api(ruta, opciones) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${ruta}`, Object.assign({}, opciones, { headers: cabeceras(opciones && opciones.headers) }));
+    if (!r.ok) {
+      let msg = await r.text();
+      try { const j = JSON.parse(msg); msg = j.message || msg; } catch (e) {}
+      throw new Error(msg);
+    }
+    const t = await r.text();
+    return t ? JSON.parse(t) : null;
+  }
+
+  async function gestionarSesion(session) {
+    if (!session) {
+      if (window.__demo !== 'fallo') {
+        if (!window.__demo) {
+          window.__demo = 'pendiente';
+          supabaseClient.auth.signInWithPassword({ email: DEMO_EMAIL, password: DEMO_PASSWORD })
+            .then(({ error }) => { if (error) { console.error('Demo: no se pudo entrar', error); window.__demo = 'fallo'; gestionarSesion(null); } });
+        }
+        return;
+      }
+      // Respaldo: solo lectura
+      TOKEN_ACTUAL = SUPABASE_ANON_KEY; esAdmin = false; autorizado = false;
+      el('etiqueta-sesion').textContent = 'Modo demostración (solo lectura)';
+      if (!iniciado) { iniciado = true; cargarTodo(); }
+      return;
+    }
+    TOKEN_ACTUAL = session.access_token;
+    const { data: persona } = await supabaseClient.from('personas').select('id, rol').eq('user_id', session.user.id).single();
+    autorizado = !!persona;
+    esAdmin = !!persona && persona.rol === 'admin';
+    el('etiqueta-sesion').textContent = session.user.email === DEMO_EMAIL ? 'Modo demostración' : session.user.email;
+    if (!iniciado) { iniciado = true; cargarTodo(); } else { pintar(); }
+  }
+  supabaseClient.auth.getSession().then(({ data: { session } }) => gestionarSesion(session));
+  supabaseClient.auth.onAuthStateChange((evento, session) => {
+    if (evento === 'TOKEN_REFRESHED' && session) { TOKEN_ACTUAL = session.access_token; return; }
+    if (evento === 'SIGNED_IN' || evento === 'SIGNED_OUT') gestionarSesion(session);
+  });
+
+  // ── Datos ───────────────────────────────────────────────────────────────
+  let maquinas = [], tareas = [], actividades = [], revisiones = [], personas = [];
+
+  async function cargarTodo() {
+    try {
+      [maquinas, tareas, actividades, revisiones] = await Promise.all([
+        api('v_maquinas_estado?select=*&order=activa.desc,nombre'),
+        api('v_maquinas_tareas_estado?select=*&order=nombre'),
+        api('v_maquinas_actividades?select=*&order=fecha_actividad.desc,id.desc'),
+        api('maquinas_revisiones?select=*,maquinas_tareas(nombre)&order=fecha.desc,id.desc'),
+      ]);
+      if (esAdmin) { try { personas = await api('personas?select=nombre,nif,email&nif=not.is.null&order=nombre'); } catch (e) { personas = []; } }
+      pintar();
+    } catch (e) {
+      el('contenido').innerHTML = `<div class="estado-pagina">❌ No se pudo cargar la maquinaria: ${esc(e.message)}</div>`;
+    }
+  }
+
+  // ── Pintar ──────────────────────────────────────────────────────────────
+  const ORDEN = { vencida: 0, proxima: 1, al_dia: 2, inactiva: 3 };
+  const TEXTO_ESTADO = { vencida: 'Vencida', proxima: 'Próxima', al_dia: 'Al día', inactiva: 'Inactiva' };
+
+  function textoTarea(t) {
+    const partes = [];
+    if (t.cada_horas != null) {
+      const f = Number(t.faltan_horas);
+      partes.push((f > 0 ? `Faltan <strong>${h(f)}</strong>` : `Pasada en <strong>${h(-f)}</strong>`) +
+        ` · toca a las ${h(t.horas_proxima)} · ${h(t.horas_desde_revision)} desde la última (${h(t.horas_ultima)})`);
+    }
+    if (t.cada_meses != null) {
+      const d = Number(t.faltan_dias);
+      partes.push((d > 0 ? `Faltan <strong>${d} días</strong>` : d === 0 ? '<strong>Vence hoy</strong>' : `<strong>Vencida hace ${-d} días</strong>`) +
+        ` · toca el ${fecha(t.fecha_proxima)} · última el ${fecha(t.fecha_ultima)}`);
+    }
+    return partes.join('<br>');
+  }
+
+  function reglaTarea(t) {
+    const r = [];
+    if (t.cada_horas != null) r.push(`cada ${h(t.cada_horas)}` + (Number(t.avisar_horas_antes) ? `, aviso ${h(t.avisar_horas_antes)} antes` : ''));
+    if (t.cada_meses != null) r.push(`cada ${t.cada_meses} ${t.cada_meses == 1 ? 'mes' : 'meses'}` + (Number(t.avisar_dias_antes) ? `, aviso ${t.avisar_dias_antes} días antes` : ''));
+    return r.join(' · ');
+  }
+
+  function progreso(t) {
+    let p = 0;
+    if (t.cada_horas != null) p = Math.max(p, Number(t.horas_desde_revision) / Number(t.cada_horas));
+    if (t.cada_meses != null && t.fecha_ultima && t.fecha_proxima) {
+      const ini = new Date(t.fecha_ultima), fin = new Date(t.fecha_proxima), ahora = new Date(hoy());
+      p = Math.max(p, (ahora - ini) / Math.max(1, fin - ini));
+    }
+    return Math.max(0, Math.min(1, p || 0));
+  }
+
+  function pintar() {
+    const activas = maquinas.filter(m => m.activa);
+    const tAct = tareas.filter(t => t.estado !== 'inactiva');
+    const nProx = tAct.filter(t => t.estado === 'proxima').length;
+    const nVenc = tAct.filter(t => t.estado === 'vencida').length;
+    const horasLibro = maquinas.reduce((a, m) => a + Number(m.horas_libro || 0), 0);
+    const nAct = maquinas.reduce((a, m) => a + Number(m.n_actividades || 0), 0);
+
+    let html = `
+      <div class="resumen">
+        <div class="tile"><div class="etq">Máquinas activas</div><div class="num">${activas.length}</div><div class="sub">${maquinas.length - activas.length ? (maquinas.length - activas.length) + ' inactivas' : '&nbsp;'}</div></div>
+        <div class="tile"><div class="etq">Horas en el Libro (global)</div><div class="num">${h(horasLibro)}</div><div class="sub">${nAct} ${nAct === 1 ? 'actividad' : 'actividades'} con tractor</div></div>
+        <div class="tile proxima"><div class="etq">Mantenimiento próximo</div><div class="num">${nProx}</div><div class="sub">${nProx === 1 ? 'tarea' : 'tareas'}</div></div>
+        <div class="tile vencida"><div class="etq">Mantenimiento vencido</div><div class="num">${nVenc}</div><div class="sub">${nVenc === 1 ? 'tarea' : 'tareas'}</div></div>
+      </div>`;
+
+    if (esAdmin) html += `<div style="display:flex;justify-content:flex-end;margin-bottom:14px;"><button class="btn" id="btn-nueva-maquina">＋ Dar de alta una máquina</button></div>`;
+
+    if (!maquinas.length) {
+      html += `<div class="card"><p class="ayuda" style="margin:0">Aún no hay máquinas. ${esAdmin ? 'Da de alta la primera con el botón de arriba: nombre (p. ej. JD 7600) y las horas con las que inicia.' : 'El administrador debe darlas de alta.'}</p></div>`;
+    }
+
+    maquinas.forEach(m => {
+      const ts = tareas.filter(t => t.maquina_id === m.id).sort((a, b) => (ORDEN[a.estado] - ORDEN[b.estado]) || a.nombre.localeCompare(b.nombre));
+      const acts = actividades.filter(a => a.maquina_id === m.id);
+      const revs = revisiones.filter(r => r.maquina_id === m.id);
+      const horasActs = acts.reduce((a, x) => a + Number(x.horas || 0), 0);
+
+      html += `<div class="card ${m.activa ? '' : 'inactiva'}">
+        <div class="maq-cab">
+          <div>
+            <h2>${esc(m.nombre)} ${m.activa ? '' : '<span class="chip inactiva">Inactiva</span>'}</h2>
+            <div class="meta">${esc(m.tipo || '')}${m.titular_nombre ? ' · titular: ' + esc(m.titular_nombre) : ''}${m.email_aviso ? ' · avisos a ' + esc(m.email_aviso) : ''}</div>
+          </div>
+          <div class="contador">
+            <div class="num">${h(m.horas_totales)}</div>
+            <div class="sub">inició con ${h(m.horas_iniciales)} (${fecha(m.fecha_alta)}) · +${h(m.horas_libro)} en el Libro</div>
+          </div>
+        </div>
+        <div class="tareas">`;
+
+      if (!ts.length) html += `<div class="vacio">Sin tareas de mantenimiento.${esAdmin ? ' Añade una (p. ej. cambio de aceite cada 500 h).' : ''}</div>`;
+      ts.forEach(t => {
+        html += `<div class="tarea">
+          <div>
+            <div class="nom">${esc(t.nombre)} <span class="chip ${t.estado}">${TEXTO_ESTADO[t.estado]}</span> <span class="regla">${esc(reglaTarea(t))}</span></div>
+            <div class="detalle">${textoTarea(t)}</div>
+            <div class="barra"><span class="${t.estado}" style="width:${(progreso(t) * 100).toFixed(0)}%"></span></div>
+          </div>
+          <div class="acciones-tarea">
+            ${autorizado && t.estado !== 'inactiva' ? `<button class="btn" data-revision="${t.id}">✔ Revisión hecha</button>` : ''}
+            ${esAdmin ? `<button class="btn-peligro" data-borrar-tarea="${t.id}" title="Quitar esta tarea">Quitar</button>` : ''}
+          </div>
+        </div>`;
+      });
+      html += `</div>`;
+
+      if (esAdmin) html += `<div class="pie-maq">
+          <button class="btn-sec" data-nueva-tarea="${m.id}">＋ Añadir tarea</button>
+          <button class="btn-sec" data-editar-maquina="${m.id}">Editar máquina</button>
+        </div>`;
+
+      // Líneas de este tractor (cada actividad del Libro con su contador)
+      html += `<details class="desplegable"><summary>Actividades con este tractor (${acts.length})</summary>`;
+      if (!acts.length) {
+        html += `<div class="vacio">Todavía no hay actividades. Se añaden desde el mapa: «Agregar actividad» → «Tractor / máquina».</div>`;
+      } else {
+        html += `<div class="tabla-wrap"><table><thead><tr><th>Fecha</th><th>Actividad</th><th>Finca</th><th>Titular</th><th class="n">Horas</th><th class="n">Contador</th></tr></thead><tbody>`;
+        acts.forEach(a => {
+          html += `<tr><td>${fecha(a.fecha_actividad)}</td><td>${esc(a.actividad)}</td><td>${esc(a.finca || a.codigo_sigpac || '')}</td><td>${esc(a.titular || '')}</td><td class="n">${h(a.horas)}</td><td class="n">${h(a.contador_despues)}</td></tr>`;
+        });
+        html += `</tbody><tfoot><tr><td colspan="4">Total en el Libro</td><td class="n">${h(horasActs)}</td><td class="n">${h(m.horas_totales)}</td></tr></tfoot></table></div>`;
+      }
+      html += `</details>`;
+
+      html += `<details class="desplegable"><summary>Revisiones hechas (${revs.length})</summary>`;
+      if (!revs.length) html += `<div class="vacio">Sin revisiones registradas.</div>`;
+      else {
+        html += `<div class="tabla-wrap"><table><thead><tr><th>Fecha</th><th>Tarea</th><th class="n">Contador</th><th>Quién</th><th>Notas</th></tr></thead><tbody>`;
+        revs.forEach(r => {
+          html += `<tr><td>${fecha(r.fecha)}</td><td>${esc(r.maquinas_tareas ? r.maquinas_tareas.nombre : '')}</td><td class="n">${h(r.horas_contador)}</td><td>${esc(r.hecha_por_nombre || '')}</td><td>${esc(r.notas || '')}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+      }
+      html += `</details></div>`;
+    });
+
+    el('contenido').innerHTML = html;
+  }
+
+  // ── Acciones ────────────────────────────────────────────────────────────
+  const abrir = id => el(id).classList.add('visible');
+  const cerrar = id => el(id).classList.remove('visible');
+  const msg = (id, texto, tipo) => { el(id).textContent = texto || ''; el(id).className = 'modal-estado ' + (tipo || ''); };
+  document.querySelectorAll('[data-cerrar]').forEach(b => b.addEventListener('click', () => cerrar(b.dataset.cerrar)));
+  document.querySelectorAll('.modal-overlay').forEach(o => o.addEventListener('mousedown', e => { if (e.target === o) cerrar(o.id); }));
+
+  el('contenido').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.id === 'btn-nueva-maquina') return abrirMaquina(null);
+    if (b.dataset.revision) return abrirRevision(Number(b.dataset.revision));
+    if (b.dataset.nuevaTarea) return abrirTarea(Number(b.dataset.nuevaTarea));
+    if (b.dataset.editarMaquina) return abrirMaquina(Number(b.dataset.editarMaquina));
+    if (b.dataset.borrarTarea) return borrarTarea(Number(b.dataset.borrarTarea));
+  });
+
+  // Revisión hecha
+  let tareaRevision = null;
+  function abrirRevision(id) {
+    const t = tareas.find(x => x.id === id); if (!t) return;
+    tareaRevision = t;
+    el('revision-sub').textContent = `${t.maquina} · ${t.nombre}`;
+    el('rev-fecha').value = hoy(); el('rev-fecha').max = hoy();
+    el('rev-horas').value = t.horas_totales != null ? Number(t.horas_totales) : '';
+    el('rev-notas').value = '';
+    msg('rev-estado');
+    abrir('modal-revision');
+  }
+  el('btn-guardar-revision').addEventListener('click', async () => {
+    if (!tareaRevision) return;
+    const f = el('rev-fecha').value, hrs = el('rev-horas').value;
+    if (!f) return msg('rev-estado', 'Indica la fecha.', 'error');
+    if (hrs !== '' && Number(hrs) < 0) return msg('rev-estado', 'Las horas no pueden ser negativas.', 'error');
+    el('btn-guardar-revision').disabled = true; msg('rev-estado', 'Guardando…');
+    try {
+      await api('rpc/registrar_revision', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_tarea_id: tareaRevision.id, p_fecha: f, p_horas: hrs === '' ? null : Number(hrs), p_notas: el('rev-notas').value.trim() || null }) });
+      cerrar('modal-revision');
+      await cargarTodo();
+    } catch (e) { msg('rev-estado', '❌ ' + e.message, 'error'); }
+    finally { el('btn-guardar-revision').disabled = false; }
+  });
+
+  // Máquina (alta / edición)
+  let maquinaEditando = null;
+  function abrirMaquina(id) {
+    maquinaEditando = id ? maquinas.find(m => m.id === id) : null;
+    const m = maquinaEditando || {};
+    el('maq-titulo').textContent = maquinaEditando ? `Editar ${m.nombre}` : 'Dar de alta una máquina';
+    el('maq-nombre').value = m.nombre || '';
+    el('maq-tipo').value = m.tipo || 'Tractor';
+    const sel = el('maq-titular');
+    sel.innerHTML = '<option value="">Sin titular</option>' + personas.map(p => `<option value="${esc(p.nif)}" data-email="${esc(p.email || '')}">${esc(p.nombre)} (${esc(p.nif)})</option>`).join('');
+    sel.value = m.titular_nif || '';
+    el('maq-email').value = m.email_aviso || '';
+    el('maq-horas').value = m.horas_iniciales != null ? Number(m.horas_iniciales) : '';
+    el('maq-fecha').value = m.fecha_alta ? String(m.fecha_alta).slice(0, 10) : hoy();
+    el('maq-activa').checked = maquinaEditando ? !!m.activa : true;
+    el('maq-activa-wrap').style.display = maquinaEditando ? 'flex' : 'none';
+    el('maq-notas').value = m.notas || '';
+    msg('maq-estado');
+    abrir('modal-maquina');
+  }
+  el('maq-titular').addEventListener('change', () => {
+    const o = el('maq-titular').selectedOptions[0];
+    if (o && o.dataset.email && !el('maq-email').value) el('maq-email').value = o.dataset.email;
+  });
+  el('btn-guardar-maquina').addEventListener('click', async () => {
+    const nombre = el('maq-nombre').value.trim();
+    const horas = el('maq-horas').value;
+    const email = el('maq-email').value.trim();
+    if (!nombre) return msg('maq-estado', 'Escribe el nombre de la máquina.', 'error');
+    if (horas === '' || Number(horas) < 0) return msg('maq-estado', 'Indica las horas con las que inicia (0 si es nueva).', 'error');
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return msg('maq-estado', 'El correo no parece válido.', 'error');
+    const datos = {
+      nombre, tipo: el('maq-tipo').value.trim() || 'Tractor',
+      titular_nif: el('maq-titular').value || null, email_aviso: email || null,
+      horas_iniciales: Number(horas), fecha_alta: el('maq-fecha').value || hoy(),
+      notas: el('maq-notas').value.trim() || null,
+    };
+    if (maquinaEditando) datos.activa = el('maq-activa').checked;
+    el('btn-guardar-maquina').disabled = true; msg('maq-estado', 'Guardando…');
+    try {
+      if (maquinaEditando) await api(`maquinas?id=eq.${maquinaEditando.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+      else await api('maquinas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+      cerrar('modal-maquina');
+      await cargarTodo();
+    } catch (e) {
+      msg('maq-estado', /maquinas_nombre_unico|duplicate/.test(e.message) ? '❌ Ya hay una máquina con ese nombre.' : '❌ ' + e.message, 'error');
+    } finally { el('btn-guardar-maquina').disabled = false; }
+  });
+
+  // Tarea de mantenimiento
+  let maquinaTarea = null;
+  function abrirTarea(maquinaId) {
+    maquinaTarea = maquinas.find(m => m.id === maquinaId); if (!maquinaTarea) return;
+    el('tarea-sub').textContent = `${maquinaTarea.nombre} · contador actual ${h(maquinaTarea.horas_totales)}`;
+    ['tar-nombre', 'tar-cada-horas', 'tar-antes-horas', 'tar-ultima-horas', 'tar-cada-meses', 'tar-antes-dias', 'tar-ultima-fecha'].forEach(id => el(id).value = '');
+    el('tar-por-horas').checked = true; el('tar-por-fecha').checked = false;
+    el('tar-ultima-fecha').max = hoy();
+    msg('tar-estado');
+    abrir('modal-tarea');
+  }
+  el('btn-guardar-tarea').addEventListener('click', async () => {
+    const nombre = el('tar-nombre').value.trim();
+    const porHoras = el('tar-por-horas').checked, porFecha = el('tar-por-fecha').checked;
+    if (!nombre) return msg('tar-estado', 'Escribe el nombre de la tarea.', 'error');
+    if (!porHoras && !porFecha) return msg('tar-estado', 'Marca «Por horas de uso», «Por fecha» o ambas.', 'error');
+    const datos = { maquina_id: maquinaTarea.id, nombre };
+    if (porHoras) {
+      const cada = Number(el('tar-cada-horas').value);
+      if (!(cada > 0)) return msg('tar-estado', 'Indica cada cuántas horas toca.', 'error');
+      const antes = Number(el('tar-antes-horas').value || 0);
+      if (antes < 0 || antes >= cada) return msg('tar-estado', 'El aviso previo debe ser menor que el intervalo.', 'error');
+      datos.cada_horas = cada; datos.avisar_horas_antes = antes;
+      if (el('tar-ultima-horas').value !== '') {
+        const u = Number(el('tar-ultima-horas').value);
+        if (u < 0 || u > Number(maquinaTarea.horas_totales)) return msg('tar-estado', `La última revisión debe estar entre 0 y ${h(maquinaTarea.horas_totales)}.`, 'error');
+        datos.horas_ultima = u;
+      }
+    }
+    if (porFecha) {
+      const meses = parseInt(el('tar-cada-meses').value, 10);
+      if (!(meses > 0)) return msg('tar-estado', 'Indica cada cuántos meses toca.', 'error');
+      datos.cada_meses = meses; datos.avisar_dias_antes = parseInt(el('tar-antes-dias').value || '0', 10);
+      if (el('tar-ultima-fecha').value) datos.fecha_ultima = el('tar-ultima-fecha').value;
+    }
+    el('btn-guardar-tarea').disabled = true; msg('tar-estado', 'Guardando…');
+    try {
+      await api('maquinas_tareas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(datos) });
+      cerrar('modal-tarea');
+      await cargarTodo();
+    } catch (e) { msg('tar-estado', '❌ ' + e.message, 'error'); }
+    finally { el('btn-guardar-tarea').disabled = false; }
+  });
+
+  async function borrarTarea(id) {
+    const t = tareas.find(x => x.id === id); if (!t) return;
+    if (!confirm(`¿Quitar la tarea «${t.nombre}» de ${t.maquina}? Se borra también su historial de revisiones.`)) return;
+    try { await api(`maquinas_tareas?id=eq.${id}`, { method: 'DELETE' }); await cargarTodo(); }
+    catch (e) { alert('No se pudo quitar: ' + e.message); }
+  }
+</script>
+</body>
+</html>

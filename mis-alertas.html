@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mis Alertas — Visor de Fincas</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f0; min-height: 100vh; }
+
+  header { background: #1a3a2a; color: white; padding: 18px 24px; }
+  header h1 { font-size: 20px; }
+  header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 24px; }
+  .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 24px; margin-bottom: 20px; }
+  .card h2 { font-size: 16px; color: #1a3a2a; margin-bottom: 6px; }
+  .card p.ayuda { font-size: 13px; color: #777; margin-bottom: 16px; line-height: 1.5; }
+
+  label { display: block; font-size: 12px; font-weight: 700; color: #1a3a2a; text-transform: uppercase; letter-spacing: 0.3px; margin: 12px 0 6px; }
+  label:first-of-type { margin-top: 0; }
+  input, select, textarea {
+    width: 100%; padding: 9px 11px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;
+    font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  .fila-dos { display: flex; gap: 12px; }
+  .fila-dos > div { flex: 1; }
+
+  button.primario {
+    margin-top: 18px; width: 100%; background: #1a3a2a; color: white; border: none;
+    border-radius: 8px; padding: 11px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  button.primario:hover:not(:disabled) { background: #244f38; }
+  button.primario:disabled { background: #aaa; cursor: not-allowed; }
+  button.secundario {
+    background: none; border: 1px solid #ccc; color: #555; border-radius: 6px;
+    padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+
+  #mensaje-crear, #mensaje-buscar { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-top: 14px; display: none; }
+  #mensaje-crear.visible, #mensaje-buscar.visible { display: block; }
+  #mensaje-crear.ok, #mensaje-buscar.ok { background: #eef3ea; color: #244f38; }
+  #mensaje-crear.error, #mensaje-buscar.error { background: #fff5f5; color: #c0392b; }
+
+  .alerta-item {
+    border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-top: 10px;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+  }
+  .alerta-item .info { font-size: 13px; }
+  .alerta-item .info strong { color: #1a3a2a; }
+  .alerta-item .meta { font-size: 12px; color: #888; margin-top: 3px; }
+  .estado-badge { font-size: 10px; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; }
+  .estado-badge.pendiente { background: #fff3cd; color: #8a6d00; }
+  .estado-badge.enviada { background: #eaf2fa; color: #1F4E79; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔔 Mis Alertas</h1>
+  <p>Crea recordatorios propios (ej. "hoy regar", "aplicar tratamiento") — llegan por correo el día que indiques</p>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Crear una alerta nueva</h2>
+    <p class="ayuda">Se guarda con tu nombre y correo, para que después puedas encontrarla en "Ver mis alertas" más abajo.</p>
+
+    <div class="fila-dos">
+      <div>
+        <label>Tu nombre</label>
+        <input type="text" id="c-nombre" placeholder="Ej. Albert" />
+      </div>
+      <div>
+        <label>Tu correo</label>
+        <input type="email" id="c-correo" placeholder="tucorreo@ejemplo.com" />
+      </div>
+    </div>
+
+    <label>Concepto</label>
+    <input type="text" id="c-concepto" placeholder="Ej. Regar parcela Urgasa Pi" />
+
+    <div class="fila-dos">
+      <div>
+        <label>Fecha del evento</label>
+        <input type="date" id="c-fecha" />
+      </div>
+      <div>
+        <label>Avisar con cuántos días de antelación</label>
+        <input type="number" id="c-dias-antes" min="0" value="0" />
+      </div>
+    </div>
+
+    <label>¿Se repite?</label>
+    <select id="c-periodicidad">
+      <option value="NA">No se repite</option>
+      <option value="mensual">Cada mes</option>
+      <option value="3 meses">Cada 3 meses</option>
+      <option value="6 meses">Cada 6 meses</option>
+      <option value="anual">Cada año</option>
+    </select>
+
+    <label>Finca (opcional)</label>
+    <input type="text" id="c-finca" placeholder="Ej. Urgasa Pi" />
+
+    <label>Notas (opcional)</label>
+    <textarea id="c-notas" placeholder="Observaciones..."></textarea>
+
+    <button class="primario" id="btn-crear">Guardar alerta</button>
+    <div id="mensaje-crear"></div>
+  </div>
+
+  <div class="card">
+    <h2>Ver mis alertas</h2>
+    <p class="ayuda">Escribe el correo con el que creaste tus alertas para verlas y, si hace falta, borrarlas.</p>
+    <label>Tu correo</label>
+    <div style="display:flex; gap:8px;">
+      <input type="email" id="b-correo" placeholder="tucorreo@ejemplo.com" style="flex:1;" />
+      <button class="secundario" id="btn-buscar" style="flex-shrink:0;">Buscar</button>
+    </div>
+    <div id="mensaje-buscar"></div>
+    <div id="lista-alertas"></div>
+  </div>
+</main>
+
+<script>
+  const SUPABASE_URL      = 'https://xciuhtoolbhuvoeawmkh.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjaXVodG9vbGJodXZvZWF3bWtoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4MDEzNjIsImV4cCI6MjEwNzM3NzM2Mn0.9SKitp_DjviQI7XlKyRBgYsrwsGZh1Q9x5VI3fw96yY';
+
+  const el = (id) => document.getElementById(id);
+
+  function mostrarMensaje(id, texto, tipo) {
+    el(id).textContent = texto;
+    el(id).className = `visible ${tipo}`;
+  }
+
+  el('btn-crear').addEventListener('click', async () => {
+    const nombre = el('c-nombre').value.trim();
+    const correo = el('c-correo').value.trim();
+    const concepto = el('c-concepto').value.trim();
+    const fecha = el('c-fecha').value;
+
+    if (!nombre || !correo || !concepto || !fecha) {
+      mostrarMensaje('mensaje-crear', 'Completa al menos: nombre, correo, concepto y fecha.', 'error');
+      return;
+    }
+
+    el('btn-crear').disabled = true;
+
+    const cuerpo = {
+      concepto,
+      fecha_evento: fecha,
+      periodicidad: el('c-periodicidad').value,
+      dias_antes: parseInt(el('c-dias-antes').value) || 0,
+      titular: nombre,
+      finca: el('c-finca').value.trim() || null,
+      email_destino: correo,
+      notas: el('c-notas').value.trim() || null,
+      estado: 'pendiente',
+      origen: 'formulario',
+    };
+
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/alertas`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify(cuerpo),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+
+      mostrarMensaje('mensaje-crear', '✅ Alerta guardada. Te llegará un correo el día que corresponda.', 'ok');
+      ['c-nombre','c-concepto','c-fecha','c-finca','c-notas'].forEach(id => el(id).value = '');
+      el('c-dias-antes').value = 0;
+      el('c-periodicidad').value = 'NA';
+    } catch (e) {
+      mostrarMensaje('mensaje-crear', 'No se pudo guardar: ' + e.message, 'error');
+    } finally {
+      el('btn-crear').disabled = false;
+    }
+  });
+
+  el('btn-buscar').addEventListener('click', buscarAlertas);
+  el('b-correo').addEventListener('keydown', (e) => { if (e.key === 'Enter') buscarAlertas(); });
+
+  async function buscarAlertas() {
+    const correo = el('b-correo').value.trim();
+    if (!correo) { mostrarMensaje('mensaje-buscar', 'Escribe tu correo.', 'error'); return; }
+
+    el('lista-alertas').innerHTML = '';
+    try {
+      const resp = await fetch(
+        `${SUPABASE_URL}/rest/v1/alertas?email_destino=eq.${encodeURIComponent(correo)}&order=fecha_evento.asc`,
+        { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+      );
+      if (!resp.ok) throw new Error(await resp.text());
+      const datos = await resp.json();
+
+      if (!datos.length) {
+        mostrarMensaje('mensaje-buscar', 'No se encontraron alertas con ese correo.', 'error');
+        return;
+      }
+      el('mensaje-buscar').className = '';
+      renderizarAlertas(datos);
+    } catch (e) {
+      mostrarMensaje('mensaje-buscar', 'Error al buscar: ' + e.message, 'error');
+    }
+  }
+
+  function renderizarAlertas(datos) {
+    const cont = el('lista-alertas');
+    cont.innerHTML = datos.map(a => `
+      <div class="alerta-item">
+        <div class="info">
+          <strong>${a.concepto}</strong>
+          <span class="estado-badge ${a.estado}">${a.estado}</span>
+          <div class="meta">${a.fecha_evento} · avisa ${a.dias_antes} día(s) antes${a.periodicidad && a.periodicidad !== 'NA' ? ' · se repite: ' + a.periodicidad : ''}</div>
+          ${a.finca ? `<div class="meta">Finca: ${a.finca}</div>` : ''}
+        </div>
+        <button class="secundario" onclick="borrarAlerta(${a.id})">🗑 Borrar</button>
+      </div>
+    `).join('');
+  }
+
+  async function borrarAlerta(id) {
+    if (!confirm('¿Borrar esta alerta? No se puede deshacer.')) return;
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/alertas?id=eq.${id}`, {
+        method: 'DELETE',
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      buscarAlertas(); // refrescar la lista
+    } catch (e) {
+      alert('No se pudo borrar: ' + e.message);
+    }
+  }
+</script>
+
+</body>
+</html>
